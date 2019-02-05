@@ -93,12 +93,35 @@ def superm2(image):
     img3 = cv2.drawMatches(image, kp1, mimage, kp2, good[:15], None, flags=2)
     #print(*(m.distance for m in matches[:10]))
     #cv2.imshow('a',img3); cv2.waitKey(0);
+    counts, xedges, yedges = np.histogram2d(houghr, houghth, bins=200)
+    plt.hist2d(houghr, houghth, bins=200)
+    plt.show()
+    a = counts
+    ind = np.unravel_index(np.argmax(a, axis=None), a.shape)
+    def largest_indices(ary, n):
+        """Returns the n largest indices from a numpy array."""
+        flat = ary.flatten()
+        indices = np.argpartition(flat, -n)[-n:]
+        indices = indices[np.argsort(-flat[indices])]
+        i, j = np.unravel_index(indices, ary.shape)
+        print(ary.shape)
+        for k in range(i.shape[0]):
+            if (j[k]>=2) and(j[k]<=ary.shape[1]-2):
+                print(i[k],j[k])
+                return (i[k],j[k]) 
+    ind = largest_indices(a, 10)          
+    r = xedges[ind[0]]
+    theta = yedges[ind[1]]
+    counts.dump('counts.pickle')
+    xedges.dump('xedges.pickle')
+    yedges.dump('yedges.pickle')
     def hex():
         plt.hexbin(houghr, houghth, bins=200)
         plt.show()
     hex()
-    #draw(2.8, 2.4)
-    #cv2.imshow('a', image); cv2.waitKey(0);
+    print(r, theta)
+    draw(r, theta)
+    cv2.imshow('a', image); cv2.waitKey(0);
 def draw(image, r, theta):
     if np.pi/4 < theta < 3*(np.pi/4):
         for x in range(len(image.T)):

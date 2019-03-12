@@ -7,8 +7,8 @@
 #   (when transformed to numpy array) to be 3D array with
 #   None (or np. nan values in slices where )
 #  --direction 0,1,2 (depending on which axis to interpolate)
-# python3.6 interpolation.py --ipath  ../../data/001_25_mask.nii --opath file_with_broken_mask.nii.gz --itype break_mask --direction 1
-# python3.6 interpolation.py --ipath file_with_broken_mask.nii.gz  --opath file_to_output_interpolated_mask.nii.gz --itype contour --direction 1
+# python3.6 interpolation.py --ipath  ../../data/001_25_mask.nii --opath file_with_broken_mask_5.nii.gz --itype break_mask --direction 1 --step 5
+# python3.6 interpolation.py --ipath file_with_broken_mask.nii.gz  --opath file_to_output_interpolated_mask.nii.gz --itype contour --direction 1 --offset 0
 import argparse
 import os, numpy as np, nibabel as nib
 from nibabel.testing import data_path
@@ -106,11 +106,12 @@ def fill_interp_contours(img_mask_data, contours={},
         interps.append(slice_i)
     return np.transpose(np.dstack(interps),(0,2,1))
 
-def break_mask(img_mask_data, direction=1):
+def break_mask(img_mask_data, direction=1, step=5):
     img_mask_data_broken_1 = copy.deepcopy(img_mask_data)
     #zepsuc maske
-    for y in tqdm(range(0,img_mask_data_broken_1.shape[direction],5)):
-        for i in range(1,4+1):
+    for y in tqdm(range(0,img_mask_data_broken_1.shape[direction],step)):
+        diff = img_mask_data_broken_1.shape[direction] - y
+        for i in range(1,min((step-1)+1,diff)):
             if direction==1:
                 img_mask_data_broken_1[:,y+i,:] = np.nan
             elif direction==0:
@@ -187,7 +188,7 @@ def prawidlowa_interpolacja_konturow_2D(img_mask_data, direction=1, x_offset=50,
 
 def main(ipath='img_mask_data_broken_1.nii.gz',
          opath='img_mask_data_interpolated_1.nii.gz',direction=1,
-         itype='full_simplified', offset=50):
+         itype='full_simplified', offset=50, step=5):
     img_mask = nib.load(ipath)
     affine = img_mask.get_affine()
     img_mask_data = img_mask.get_fdata()#[:50,90:100,:50]
@@ -196,7 +197,8 @@ def main(ipath='img_mask_data_broken_1.nii.gz',
         interp_mask = simple_interpolation(img_mask_data)
     elif itype == 'break_mask':
         interp_mask = break_mask(img_mask_data,
-                                direction=direction)
+                                direction=direction,
+                                step=step)
     elif itype =='contour':
         j = {}
         for mask in [1,2]:
@@ -221,6 +223,7 @@ if __name__ == '__main__':
     parser.add_argument('--itype', help='type of interpolation to be performed: \
                     contour or full_simplified', type=str)
     parser.add_argument('--offset', help='x offset value', type=int, default=50)
+    parser.add_argument('--step', help='step to break mask', type=int, default=5)
 
     args = parser.parse_args()
     kwargs = args.__dict__    

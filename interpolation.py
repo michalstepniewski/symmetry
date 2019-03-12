@@ -80,22 +80,29 @@ def simple_interpolation(img_mask_data):
     return np.transpose(np.dstack(interps),(0,2,1))
 
 
-def fill_interp_contours(img_mask_data, gorny_grid_z2, dolny_grid_z2):
+def fill_interp_contours(img_mask_data, contours={},
+                         offset=50):
+    '''
+    
+    '''
     import copy
     interps = []
     for y in range(img_mask_data.shape[1]):
         slice_i = copy.deepcopy(img_mask_data[:,y,:])
-        zvals = gorny_grid_z2[:,y]
-        zvals_d = dolny_grid_z2[:,y]
-        for x in range(gorny_grid_z2.shape[0]):
+        for mask in contours.keys():
+         gorny_grid_z2, dolny_grid_z2 = [contours[mask][i] for i in [
+                  'up','down']]
+         zvals = gorny_grid_z2[:,y]
+         zvals_d = dolny_grid_z2[:,y]
+         for x in range(gorny_grid_z2.shape[0]):
             #print(zvals[x])
             if np.isfinite(zvals[x]):
-                slice_i[int(round(zvals[x])), x+50] =2
+                slice_i[int(round(zvals[x])), x+offset] = mask
             if np.isfinite(zvals_d[x]):
-                slice_i[int(round(zvals_d[x])), x+50] =2
+                slice_i[int(round(zvals_d[x])), x+offset] =mask
             if np.isfinite(zvals[x]) and np.isfinite(zvals_d[x]):
                 for middle_z in range(int(round(zvals_d[x])),int(round(zvals[x]))):
-                    slice_i[middle_z, x+50] =2
+                    slice_i[middle_z, x+offset] =mask
         interps.append(slice_i)
     return np.transpose(np.dstack(interps),(0,2,1))
 
@@ -134,13 +141,16 @@ def prawidlowa_interpolacja_3D(img_mask_data, step=2):
 
 
 def prawidlowa_interpolacja_konturow_2D(img_mask_data, direction=1, x_offset=50,
-                                        step=2):
+                                        step=2, mask=2):
+    '''
+    uzywam teraz tego
+    '''
     dolne_kontury = []
     gorne_kontury = []
     for z in tqdm(range(img_mask_data.shape[direction])):
         coronal_slice = img_mask_data[:,z,:]
         df = pd.DataFrame()
-        df['y'], df['x'] = np.where(coronal_slice==2)
+        df['y'], df['x'] = np.where(coronal_slice==mask)
         dolny_kontur = df.groupby('x').agg({'y':np.max}).reset_index()
         gorny_kontur = df.groupby('x').agg({'y':np.min}).reset_index()
         dolny_kontur['z'] = z
@@ -159,7 +169,8 @@ def prawidlowa_interpolacja_konturow_2D(img_mask_data, direction=1, x_offset=50,
     grid_x, grid_z = np.mgrid[x_offset:x_max:1, 0:z_max:1]
     points = gorne_kontury[['x','z']].values[::step]
     values = gorne_kontury['y'].values[::step]
-    dolny_grid_z2 = griddata(points, values, (grid_x, grid_z), method='linear')
+    dolny_grid_z2 = griddata(points, values, (grid_x, grid_z),
+                             method='linear')
     #pd.DataFrame(grid_z2[:,93],columns=['y']).reset_index().plot()
     x_max = gorne_kontury['x'].max()
     z_max = img_mask_data.shape[direction]
@@ -168,14 +179,15 @@ def prawidlowa_interpolacja_konturow_2D(img_mask_data, direction=1, x_offset=50,
     grid_x, grid_z = np.mgrid[x_offset:x_max:1, 0:z_max:1]
     points = dolne_kontury[['x','z']].values[::step]
     values = dolne_kontury['y'].values[::step]
-    gorny_grid_z2 = griddata(points, values, (grid_x, grid_z), method='linear')
+    gorny_grid_z2 = griddata(points, values, (grid_x, grid_z),
+                             method='linear')
     #pd.DataFrame(grid_z2[:,93],columns=['y']).reset_index().plot()
     return dolny_grid_z2, gorny_grid_z2
 
 
 def main(ipath='img_mask_data_broken_1.nii.gz',
          opath='img_mask_data_interpolated_1.nii.gz',direction=1,
-         itype='full_simplified'):
+         itype='full_simplified', offset=50):
     img_mask = nib.load(ipath)
     affine = img_mask.get_affine()
     img_mask_data = img_mask.get_fdata()#[:50,90:100,:50]
@@ -186,8 +198,13 @@ def main(ipath='img_mask_data_broken_1.nii.gz',
         interp_mask = break_mask(img_mask_data,
                                 direction=direction)
     elif itype =='contour':
-        dolny_grid_z2, gorny_grid_z2 = prawidlowa_interpolacja_konturow_2D(img_mask_data, direction=1)
-        interp_mask = fill_interp_contours(img_mask_data, gorny_grid_z2, dolny_grid_z2)
+        j = {}
+        for mask in [1,2]:
+            j[mask] = {}
+            j[mask]['down'], j[mask]['up'] = prawidlowa_interpolacja_konturow_2D(img_mask_data, direction=1,
+                                        x_offset=offset, mask=mask)
+
+        interp_mask = fill_interp_contours(img_mask_data, contours=j, offset=offset)
     fa = nib.Nifti1Image(interp_mask, affine)
     nib.save(fa, opath)
 
@@ -195,13 +212,16 @@ def main(ipath='img_mask_data_broken_1.nii.gz',
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Interpolate hemisphere masks.')
     parser.add_argument('--ipath', help='input file with partial mask to be interpolated\
-                     in .nii or .nii.gz format', type=str)
+                     in .nii or .nii.gz format', type=str,
+    default='img_mask_data_broken_1.nii.gz')
     parser.add_argument('--opath', help='output file to output interpolated mask into\
                       in .nii or .nii.gz format', type=str)
     parser.add_argument('--direction', help='0,1 or2 (depending on which axis to interpolate)',
                     type=int)
     parser.add_argument('--itype', help='type of interpolation to be performed: \
                     contour or full_simplified', type=str)
+    parser.add_argument('--offset', help='x offset value', type=int, default=50)
+
     args = parser.parse_args()
     kwargs = args.__dict__    
     main(**kwargs)

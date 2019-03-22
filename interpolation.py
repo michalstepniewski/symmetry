@@ -7,7 +7,7 @@
 #   (when transformed to numpy array) to be 3D array with
 #   None (or np. nan values in slices where )
 #  --direction 0,1,2 (depending on which axis to interpolate)
-# python3.6 interpolation.py --ipath  ../../data/001_25_mask.nii --opath file_with_broken_mask_5.nii.gz --itype break_mask --direction 1 --step 5
+# python3.6 interpolation.py --ipath  ../../data/001_25_mask.nii --opath file_with_broken_mask_5.nii.gz --itype break_mask --direction 1 --step 5 --gaussian
 # python3.6 interpolation.py --ipath file_with_broken_mask.nii.gz  --opath file_to_output_interpolated_mask.nii.gz --itype contour --direction 1 --offset 0
 import argparse
 import os, numpy as np, nibabel as nib
@@ -106,9 +106,12 @@ def fill_interp_contours(img_mask_data, contours={},
         interps.append(slice_i)
     return np.transpose(np.dstack(interps),(0,2,1))
 
-def break_mask(img_mask_data, direction=1, step=5):
+def break_mask(img_mask_data, direction=1, step=5, gaussian=True):
     img_mask_data_broken_1 = copy.deepcopy(img_mask_data)
     #zepsuc maske
+    if gaussian:
+        mu, sigma = 0, 0.1 # mean and standard deviation
+        
     for y in tqdm(range(0,img_mask_data_broken_1.shape[direction],step)):
         diff = img_mask_data_broken_1.shape[direction] - y
         for i in range(1,min((step-1)+1,diff)):

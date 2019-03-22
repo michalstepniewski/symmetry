@@ -166,42 +166,39 @@ def prawidlowa_interpolacja_konturow_2D(img_mask_data, direction=1, x_offset=50,
     '''
     dolne_kontury = []
     gorne_kontury = []
+    contours = {'up':[], 'down':[]}
+    aggs = {'up':np.max, 'down':np.min}
+    filled_zs = []
     for z in tqdm(range(img_mask_data.shape[direction])):
+        dfs = []
         coronal_slice = img_mask_data[:,z,:]
-        df = pd.DataFrame()
-        df['y'], df['x'] = np.where(coronal_slice==mask)
-        dolny_kontur = df.groupby('x').agg({'y':np.max}).reset_index()
-        gorny_kontur = df.groupby('x').agg({'y':np.min}).reset_index()
-        dolny_kontur['z'] = z
-        gorny_kontur['z'] = z
-        dolne_kontury.append(dolny_kontur)
-        gorne_kontury.append(gorny_kontur)
+        if np.isfinite(coronal_slice).any():
+            filled_zs.append(z)
+            df = pd.DataFrame()
+            df['y'], df['x'] = np.where(coronal_slice==mask)
+            for key in contours.keys():
+                contour = df.groupby('x').agg({'y':aggs[key]}).reset_index()
+                contour['z'] = z
+                contours[key].append(contour)
         # teraz tak; dolny kontur:
         #    dla dolnego kontura y jest funkcja x i zeta (ktory jest druga wspolrzedna niepostrzezenie)
-        # no i teraz z jest co piaty tylko# i musimy znalezc dla reszty zetow wartosci
-    dolne_kontury = pd.concat(dolne_kontury)
-    gorne_kontury = pd.concat(gorne_kontury)
-    x_max = dolne_kontury['x'].max()
-    z_max = img_mask_data.shape[direction]
-    #jest pewien problem ze wzgledu na te kropki
-    #grid musi byc w miare ciagly 'chyba'
-    grid_x, grid_z = np.mgrid[x_offset:x_max:1, 0:z_max:1]
-    points = gorne_kontury[['x','z']].values[::step]
-    values = gorne_kontury['y'].values[::step]
-    dolny_grid_z2 = griddata(points, values, (grid_x, grid_z),
+        # no i teraz z jest co piaty tylko# i musimy znalezc dla reszty zetow wartosci        
+    for key in contours.keys():
+        contours[key] = pd.concat(contours[key])
+        
+    grids = {}
+    for contour in contours.keys():
+        x_max = contours[contour]['x'].max()
+        z_max = img_mask_data.shape[direction]
+        #jest pewien problem ze wzgledu na te kropki
+        #grid musi byc w miare ciagly 'chyba'
+        grid_x, grid_z = np.mgrid[x_offset:x_max:1, 0:z_max:1]
+        points = contours[contour][['x','z']].values#[::step]
+        values = contours[contour]['y'].values#[::step]
+        grids[contour] = griddata(points, values, (grid_x, grid_z),
                              method='linear')
     #pd.DataFrame(grid_z2[:,93],columns=['y']).reset_index().plot()
-    x_max = gorne_kontury['x'].max()
-    z_max = img_mask_data.shape[direction]
-    #jest pewien problem ze wzgledu na te kropki
-    #grid musi byc w miare ciagly 'chyba'
-    grid_x, grid_z = np.mgrid[x_offset:x_max:1, 0:z_max:1]
-    points = dolne_kontury[['x','z']].values[::step]
-    values = dolne_kontury['y'].values[::step]
-    gorny_grid_z2 = griddata(points, values, (grid_x, grid_z),
-                             method='linear')
-    #pd.DataFrame(grid_z2[:,93],columns=['y']).reset_index().plot()
-    return dolny_grid_z2, gorny_grid_z2
+    return grids['down'], grids['up']
 
 
 def main(ipath='img_mask_data_broken_1.nii.gz',

@@ -106,21 +106,36 @@ def fill_interp_contours(img_mask_data, contours={},
         interps.append(slice_i)
     return np.transpose(np.dstack(interps),(0,2,1))
 
+
 def break_mask(img_mask_data, direction=1, step=5, gaussian=True):
     img_mask_data_broken_1 = copy.deepcopy(img_mask_data)
     #zepsuc maske
     if gaussian:
-        mu, sigma = 0, 0.1 # mean and standard deviation
-        
-    for y in tqdm(range(0,img_mask_data_broken_1.shape[direction],step)):
-        diff = img_mask_data_broken_1.shape[direction] - y
-        for i in range(1,min((step-1)+1,diff)):
+        mu, sigma = 0, 2 # mean and standard deviation
+        no_slices = img_mask_data_broken_1.shape[direction]
+        y = abs(int(np.random.normal(mu, sigma, 1).round()[0]))
+        ys = []
+        while y<=(no_slices-1):
+            #print(y)
+            y += int(step + np.random.normal(mu, sigma, 1).round()[0])
+            ys.append(y)
+        for y in set(range(0,img_mask_data_broken_1.shape[direction])) - set(ys):
             if direction==1:
-                img_mask_data_broken_1[:,y+i,:] = np.nan
+                img_mask_data_broken_1[:,y,:] = np.nan
             elif direction==0:
-                img_mask_data_broken_1[y+i,:,:] = np.nan
+                img_mask_data_broken_1[y,:,:] = np.nan
             elif direction==2:
-                img_mask_data_broken_1[:,:,y+i] = np.nan
+                img_mask_data_broken_1[:,:,y] = np.nan
+    else:
+        for y in tqdm(range(0,img_mask_data_broken_1.shape[direction],step)):
+            diff = img_mask_data_broken_1.shape[direction] - y
+            for i in range(1,min((step-1)+1,diff)):
+                if direction==1:
+                    img_mask_data_broken_1[:,y+i,:] = np.nan
+                elif direction==0:
+                    img_mask_data_broken_1[y+i,:,:] = np.nan
+                elif direction==2:
+                    img_mask_data_broken_1[:,:,y+i] = np.nan
     return img_mask_data_broken_1
 
 
@@ -191,7 +206,8 @@ def prawidlowa_interpolacja_konturow_2D(img_mask_data, direction=1, x_offset=50,
 
 def main(ipath='img_mask_data_broken_1.nii.gz',
          opath='img_mask_data_interpolated_1.nii.gz',direction=1,
-         itype='full_simplified', offset=50, step=5):
+         itype='full_simplified', offset=50, step=5,
+         gaussian=False):
     img_mask = nib.load(ipath)
     affine = img_mask.get_affine()
     img_mask_data = img_mask.get_fdata()#[:50,90:100,:50]
@@ -227,6 +243,7 @@ if __name__ == '__main__':
                     contour or full_simplified', type=str)
     parser.add_argument('--offset', help='x offset value', type=int, default=50)
     parser.add_argument('--step', help='step to break mask', type=int, default=5)
+    parser.add_argument('--gaussian', help='randomize step to break mask', action='store_true')
 
     args = parser.parse_args()
     kwargs = args.__dict__    
